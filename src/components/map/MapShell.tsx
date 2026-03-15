@@ -70,10 +70,15 @@ export default function MapShell() {
     new Set(["roadworks", "disruptions", "collisions", "traffic-orders"])
   );
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
-  // Collision year/month filters — null means "all selected"
+  // Collision filters — null means "all selected"
   const [collisionYears, setCollisionYears] = useState<Set<string> | null>(null);
   const [collisionMonths, setCollisionMonths] = useState<Set<number> | null>(null);
+  const [collisionSeverities, setCollisionSeverities] = useState<Set<string> | null>(null);
+
+  const SEVERITY_LEVELS = ["Fatal", "Serious", "Slight"] as const;
+  const effectiveSeverities = collisionSeverities ?? new Set(SEVERITY_LEVELS);
 
   const availableYears = useMemo(
     () => getAvailableYears(data.collisions),
@@ -99,8 +104,8 @@ export default function MapShell() {
   // Client-side filtered collisions
   const filteredCollisions = useMemo(() => {
     if (!data.collisions) return null;
-    // If all years and all months selected, skip filtering
-    if (!collisionYears && !collisionMonths) return data.collisions;
+    // If all filters at default, skip filtering
+    if (!collisionYears && !collisionMonths && !collisionSeverities) return data.collisions;
 
     const features = data.collisions.features.filter((f) => {
       const year = String(f.properties?.dataYear ?? "");
@@ -111,10 +116,12 @@ export default function MapShell() {
         const m = parseInt(date.slice(5, 7), 10);
         if (!effectiveMonths.has(m)) return false;
       }
+      const severity = String(f.properties?.severity ?? "");
+      if (!effectiveSeverities.has(severity)) return false;
       return true;
     });
     return { ...data.collisions, features } as FeatureCollection<Point>;
-  }, [data.collisions, collisionYears, collisionMonths, effectiveYears, effectiveMonths]);
+  }, [data.collisions, collisionYears, collisionMonths, collisionSeverities, effectiveYears, effectiveMonths, effectiveSeverities]);
 
   const toggleLayer = useCallback((id: DatasetId) => {
     setVisibleLayers((prev) => {
@@ -145,6 +152,15 @@ export default function MapShell() {
     });
   }, [availableMonths]);
 
+  const toggleSeverity = useCallback((sev: string) => {
+    setCollisionSeverities((prev) => {
+      const next = new Set(prev ?? new Set(SEVERITY_LEVELS));
+      if (next.has(sev)) next.delete(sev);
+      else next.add(sev);
+      return next;
+    });
+  }, []);
+
   const onClick = useCallback((event: MapMouseEvent) => {
     const feature = event.features?.[0];
     if (!feature) {
@@ -161,11 +177,20 @@ export default function MapShell() {
   }, []);
 
   return (
-    <div className="relative h-screen w-screen">
+    <div className="relative h-full w-full">
       {/* Layer toggle controls */}
-      <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur rounded-lg shadow-lg p-3 space-y-2 max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <h2 className="text-sm font-semibold text-gray-700">Layers</h2>
-        {(Object.entries(DATASET_LABELS) as [DatasetId, string][]).map(
+      <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur rounded-lg shadow-lg p-3 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-gray-700">Layers</h2>
+          <button
+            onClick={() => setPanelCollapsed((p) => !p)}
+            className="text-xs text-gray-400 hover:text-gray-600"
+            aria-label={panelCollapsed ? "Expand layers panel" : "Collapse layers panel"}
+          >
+            {panelCollapsed ? "\u25B6" : "\u25C0"}
+          </button>
+        </div>
+        {!panelCollapsed && (Object.entries(DATASET_LABELS) as [DatasetId, string][]).map(
           ([id, label]) => (
             <div key={id}>
               <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -189,9 +214,27 @@ export default function MapShell() {
                 )}
               </label>
 
-              {/* Collision year/month filters */}
+              {/* Collision severity/year/month filters */}
               {id === "collisions" && visibleLayers.has("collisions") && availableYears.length > 0 && (
                 <div className="ml-6 mt-1 space-y-1">
+                  <p className="text-xs font-medium text-gray-500">Severity</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {SEVERITY_LEVELS.map((sev) => (
+                      <label
+                        key={sev}
+                        className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={effectiveSeverities.has(sev)}
+                          onChange={() => toggleSeverity(sev)}
+                          className="rounded w-3 h-3"
+                        />
+                        {sev}
+                      </label>
+                    ))}
+                  </div>
+
                   <p className="text-xs font-medium text-gray-500">Years</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                     {availableYears.map((year) => (
@@ -240,6 +283,7 @@ export default function MapShell() {
           )
         )}
       </div>
+
 
       {/* Loading indicator */}
       {loading && (

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import NavBar from "@/components/NavBar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lambeth Cyclists — Street Monitor",
+  title: "Lambeth Cyclists",
   description:
     "Live map of roadworks, disruptions, collisions, and traffic orders affecting cycling in south London",
 };
@@ -26,9 +27,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col h-screen`}
       >
-        {children}
+        <NavBar />
+        <div className="flex-1 relative overflow-hidden">
+          {children}
+        </div>
       </body>
     </html>
   );
