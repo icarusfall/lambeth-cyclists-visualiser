@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Popup, type MapMouseEvent } from "react-map-gl/mapbox";
+import type { FeatureCollection, Point } from "geojson";
 import MapProvider from "./MapProvider";
 import RoadworksLayer from "./layers/RoadworksLayer";
 import DisruptionsLayer from "./layers/DisruptionsLayer";
@@ -17,6 +18,11 @@ const DATASET_LABELS: Record<DatasetId, string> = {
   "traffic-orders": "Traffic Orders",
 };
 
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
 const CLICKABLE_LAYERS = [
   "roadworks-points",
   "disruptions-points",
@@ -30,12 +36,85 @@ interface PopupInfo {
   properties: Record<string, string | number | boolean | null | undefined>;
 }
 
+/** Extract available years from collision features, sorted descending. */
+function getAvailableYears(fc: FeatureCollection<Point> | null): string[] {
+  if (!fc) return [];
+  const years = new Set<string>();
+  for (const f of fc.features) {
+    const y = f.properties?.dataYear;
+    if (y) years.add(String(y));
+  }
+  return [...years].sort().reverse();
+}
+
+/** Extract available months (1-12) for selected years. */
+function getAvailableMonths(
+  fc: FeatureCollection<Point> | null,
+  selectedYears: Set<string>
+): Set<number> {
+  if (!fc) return new Set();
+  const months = new Set<number>();
+  for (const f of fc.features) {
+    const date = f.properties?.date as string | undefined;
+    const year = f.properties?.dataYear as string | undefined;
+    if (!date || !year || !selectedYears.has(String(year))) continue;
+    const m = parseInt(date.slice(5, 7), 10);
+    if (m >= 1 && m <= 12) months.add(m);
+  }
+  return months;
+}
+
 export default function MapShell() {
   const { data, loading, errors } = useMapData();
   const [visibleLayers, setVisibleLayers] = useState<Set<DatasetId>>(
     new Set(["roadworks", "disruptions", "collisions", "traffic-orders"])
   );
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
+
+  // Collision year/month filters — null means "all selected"
+  const [collisionYears, setCollisionYears] = useState<Set<string> | null>(null);
+  const [collisionMonths, setCollisionMonths] = useState<Set<number> | null>(null);
+
+  const availableYears = useMemo(
+    () => getAvailableYears(data.collisions),
+    [data.collisions]
+  );
+
+  // Initialise year selection when data arrives
+  const effectiveYears = useMemo(
+    () => collisionYears ?? new Set(availableYears),
+    [collisionYears, availableYears]
+  );
+
+  const availableMonths = useMemo(
+    () => getAvailableMonths(data.collisions, effectiveYears),
+    [data.collisions, effectiveYears]
+  );
+
+  const effectiveMonths = useMemo(
+    () => collisionMonths ?? availableMonths,
+    [collisionMonths, availableMonths]
+  );
+
+  // Client-side filtered collisions
+  const filteredCollisions = useMemo(() => {
+    if (!data.collisions) return null;
+    // If all years and all months selected, skip filtering
+    if (!collisionYears && !collisionMonths) return data.collisions;
+
+    const features = data.collisions.features.filter((f) => {
+      const year = String(f.properties?.dataYear ?? "");
+      if (!effectiveYears.has(year)) return false;
+      if (collisionMonths) {
+        const date = f.properties?.date as string | undefined;
+        if (!date) return false;
+        const m = parseInt(date.slice(5, 7), 10);
+        if (!effectiveMonths.has(m)) return false;
+      }
+      return true;
+    });
+    return { ...data.collisions, features } as FeatureCollection<Point>;
+  }, [data.collisions, collisionYears, collisionMonths, effectiveYears, effectiveMonths]);
 
   const toggleLayer = useCallback((id: DatasetId) => {
     setVisibleLayers((prev) => {
@@ -45,6 +124,26 @@ export default function MapShell() {
       return next;
     });
   }, []);
+
+  const toggleYear = useCallback((year: string) => {
+    setCollisionYears((prev) => {
+      const next = new Set(prev ?? availableYears);
+      if (next.has(year)) next.delete(year);
+      else next.add(year);
+      return next;
+    });
+    // Reset month filter when years change
+    setCollisionMonths(null);
+  }, [availableYears]);
+
+  const toggleMonth = useCallback((month: number) => {
+    setCollisionMonths((prev) => {
+      const next = new Set(prev ?? availableMonths);
+      if (next.has(month)) next.delete(month);
+      else next.add(month);
+      return next;
+    });
+  }, [availableMonths]);
 
   const onClick = useCallback((event: MapMouseEvent) => {
     const feature = event.features?.[0];
@@ -64,27 +163,80 @@ export default function MapShell() {
   return (
     <div className="relative h-screen w-screen">
       {/* Layer toggle controls */}
-      <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur rounded-lg shadow-lg p-3 space-y-2">
+      <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur rounded-lg shadow-lg p-3 space-y-2 max-h-[calc(100vh-2rem)] overflow-y-auto">
         <h2 className="text-sm font-semibold text-gray-700">Layers</h2>
         {(Object.entries(DATASET_LABELS) as [DatasetId, string][]).map(
           ([id, label]) => (
-            <label
-              key={id}
-              className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={visibleLayers.has(id)}
-                onChange={() => toggleLayer(id)}
-                className="rounded"
-              />
-              {label}
-              {data[id] && (
-                <span className="text-xs text-gray-400">
-                  ({data[id]!.features.length})
-                </span>
+            <div key={id}>
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleLayers.has(id)}
+                  onChange={() => toggleLayer(id)}
+                  className="rounded"
+                />
+                {label}
+                {id === "collisions" && filteredCollisions ? (
+                  <span className="text-xs text-gray-400">
+                    ({filteredCollisions.features.length})
+                  </span>
+                ) : (
+                  data[id] && (
+                    <span className="text-xs text-gray-400">
+                      ({data[id]!.features.length})
+                    </span>
+                  )
+                )}
+              </label>
+
+              {/* Collision year/month filters */}
+              {id === "collisions" && visibleLayers.has("collisions") && availableYears.length > 0 && (
+                <div className="ml-6 mt-1 space-y-1">
+                  <p className="text-xs font-medium text-gray-500">Years</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {availableYears.map((year) => (
+                      <label
+                        key={year}
+                        className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={effectiveYears.has(year)}
+                          onChange={() => toggleYear(year)}
+                          className="rounded w-3 h-3"
+                        />
+                        {year}
+                      </label>
+                    ))}
+                  </div>
+
+                  <p className="text-xs font-medium text-gray-500 mt-1">Months</p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                    {MONTH_NAMES.map((name, i) => {
+                      const month = i + 1;
+                      const available = availableMonths.has(month);
+                      return (
+                        <label
+                          key={month}
+                          className={`flex items-center gap-1 text-xs cursor-pointer ${
+                            available ? "text-gray-500" : "text-gray-300"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={effectiveMonths.has(month)}
+                            onChange={() => toggleMonth(month)}
+                            disabled={!available}
+                            className="rounded w-3 h-3"
+                          />
+                          {name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
-            </label>
+            </div>
           )
         )}
       </div>
@@ -123,9 +275,9 @@ export default function MapShell() {
             visible={visibleLayers.has("disruptions")}
           />
         )}
-        {data.collisions && (
+        {filteredCollisions && (
           <CollisionsLayer
-            data={data.collisions}
+            data={filteredCollisions}
             visible={visibleLayers.has("collisions")}
           />
         )}
