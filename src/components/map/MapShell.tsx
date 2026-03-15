@@ -72,6 +72,30 @@ export default function MapShell() {
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
 
+  // Roadworks status filter — default to active works only
+  const ROADWORK_STATUSES = ["Planned", "In progress", "Completed", "Cancelled"] as const;
+  const [roadworkStatuses, setRoadworkStatuses] = useState<Set<string>>(
+    new Set(["Planned", "In progress"])
+  );
+
+  const filteredRoadworks = useMemo(() => {
+    if (!data.roadworks) return null;
+    const features = data.roadworks.features.filter((f) => {
+      const status = String(f.properties?.workStatus ?? "");
+      return roadworkStatuses.has(status);
+    });
+    return { ...data.roadworks, features } as FeatureCollection<Point>;
+  }, [data.roadworks, roadworkStatuses]);
+
+  const toggleRoadworkStatus = useCallback((status: string) => {
+    setRoadworkStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
+
   // Collision filters — null means "all selected"
   const [collisionYears, setCollisionYears] = useState<Set<string> | null>(null);
   const [collisionMonths, setCollisionMonths] = useState<Set<number> | null>(null);
@@ -201,7 +225,11 @@ export default function MapShell() {
                   className="rounded"
                 />
                 {label}
-                {id === "collisions" && filteredCollisions ? (
+                {id === "roadworks" && filteredRoadworks ? (
+                  <span className="text-xs text-gray-400">
+                    ({filteredRoadworks.features.length})
+                  </span>
+                ) : id === "collisions" && filteredCollisions ? (
                   <span className="text-xs text-gray-400">
                     ({filteredCollisions.features.length})
                   </span>
@@ -213,6 +241,29 @@ export default function MapShell() {
                   )
                 )}
               </label>
+
+              {/* Roadworks status filter */}
+              {id === "roadworks" && visibleLayers.has("roadworks") && (
+                <div className="ml-6 mt-1 space-y-1">
+                  <p className="text-xs font-medium text-gray-500">Status</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    {ROADWORK_STATUSES.map((status) => (
+                      <label
+                        key={status}
+                        className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={roadworkStatuses.has(status)}
+                          onChange={() => toggleRoadworkStatus(status)}
+                          className="rounded w-3 h-3"
+                        />
+                        {status}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Collision severity/year/month filters */}
               {id === "collisions" && visibleLayers.has("collisions") && availableYears.length > 0 && (
@@ -307,9 +358,9 @@ export default function MapShell() {
       )}
 
       <MapProvider interactiveLayerIds={CLICKABLE_LAYERS} onClick={onClick}>
-        {data.roadworks && (
+        {filteredRoadworks && (
           <RoadworksLayer
-            data={data.roadworks}
+            data={filteredRoadworks}
             visible={visibleLayers.has("roadworks")}
           />
         )}
