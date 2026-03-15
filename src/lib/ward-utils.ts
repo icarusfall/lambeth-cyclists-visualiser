@@ -34,16 +34,15 @@ export function getPartyColour(party: string): string {
   return "#9CA3AF";
 }
 
-/** Get margin colour — more marginal = more vivid */
+/** Get margin colour — more marginal = darker brown, safer = paler grey */
 export function getMarginColour(margin: number | null): string {
-  if (margin === null) return "#9CA3AF";
+  if (margin === null) return "#D1D5DB";
   const pct = Math.abs(margin);
-  // 0% margin = bright purple (very marginal), 30%+ = pale grey (safe)
-  if (pct < 5) return "#7C3AED";
-  if (pct < 10) return "#A78BFA";
-  if (pct < 15) return "#C4B5FD";
-  if (pct < 20) return "#DDD6FE";
-  return "#EDE9FE";
+  if (pct < 5) return "#4A2C17";   // very marginal — dark brown
+  if (pct < 10) return "#78502B";
+  if (pct < 15) return "#A67B4E";
+  if (pct < 20) return "#CDAE8A";
+  return "#E8E0D8";                 // safe seat — pale grey/taupe
 }
 
 export type ColourMode = "party" | "margin";
