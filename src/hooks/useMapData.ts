@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { FeatureCollection, Point } from "geojson";
 import type { DatasetId } from "@/lib/types";
 
@@ -24,16 +24,19 @@ export function useMapData() {
   const [data, setData] = useState<DataMap>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<Partial<Record<DatasetId, string>>>({});
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    const controller = new AbortController();
+    // Prevent React strict mode double-fetch from aborting the first request
+    if (hasFetched.current) return;
+    hasFetched.current = true;
 
     async function load() {
       const datasets = Object.entries(ENDPOINTS) as [DatasetId, string][];
 
       const results = await Promise.allSettled(
         datasets.map(async ([id, url]) => {
-          const res = await fetch(url, { signal: controller.signal });
+          const res = await fetch(url);
           if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
           const geojson = await res.json();
           return [id, geojson] as [DatasetId, FeatureCollection<Point>];
@@ -59,7 +62,6 @@ export function useMapData() {
     }
 
     load();
-    return () => controller.abort();
   }, []);
 
   return { data, loading, errors };
