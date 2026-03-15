@@ -8,13 +8,13 @@
 - Deployed to Vercel, GitHub repo synced at `icarusfall/lambeth-cyclists-visualiser`
 - Layer toggle panel, popup system, loading states all working
 
-### Streets Data (4 datasets — ON HOLD pending Postgres migration)
-- Notion fetchers written for all 4: `src/lib/notion/roadworks.ts`, `disruptions.ts`, `collisions.ts`, `traffic-orders.ts`
+### Streets Data (4 datasets — MIGRATED TO POSTGRES)
+- Postgres fetchers: `src/lib/db/roadworks.ts`, `disruptions.ts`, `collisions.ts`, `traffic-orders.ts`
+- DB client: `src/lib/db/client.ts` (pg Pool with `DATABASE_URL`)
 - GeoJSON conversion: `src/lib/geojson/convert.ts`
 - API routes: `src/app/api/geojson/{roadworks,disruptions,collisions,traffic-orders}/route.ts`
 - Map layers: clustered circles for roadworks/disruptions/traffic-orders, heatmap for collisions
-- **Problem**: Roadworks (3,800+ records, 38 pages) and Collisions timeout on Notion pagination
-- **Solution**: Migrate to PostgreSQL + PostGIS — see `MIGRATION_PLAN.md`
+- Old Notion fetchers still in `src/lib/notion/` (can be removed once wards/candidates migration is assessed)
 
 ### Wards & Candidates (IN PROGRESS — pick up here)
 - Ward boundaries GeoJSON downloaded from ONS: `public/data/lambeth-wards.geojson` (25 wards)

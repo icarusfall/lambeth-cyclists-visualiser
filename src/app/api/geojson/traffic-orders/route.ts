@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchTrafficOrders } from "@/lib/notion/traffic-orders";
+import { fetchTrafficOrders } from "@/lib/db/traffic-orders";
 import { parseCoordinates, toFeature, toFeatureCollection } from "@/lib/geojson/convert";
 
 export const revalidate = 3600; // 1 hour

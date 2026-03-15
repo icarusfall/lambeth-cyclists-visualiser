@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchDisruptions } from "@/lib/notion/disruptions";
+import { fetchDisruptions } from "@/lib/db/disruptions";
 import { parseCoordinates, toFeature, toFeatureCollection } from "@/lib/geojson/convert";
 
 export const revalidate = 3600; // 1 hour

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchCollisions } from "@/lib/notion/collisions";
+import { fetchCollisions } from "@/lib/db/collisions";
 import { parseCoordinates, toFeature, toFeatureCollection } from "@/lib/geojson/convert";
 
 export const revalidate = 86400; // 24 hours
