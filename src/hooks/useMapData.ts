@@ -11,6 +11,7 @@ const EMPTY: DataMap = {
   disruptions: null,
   collisions: null,
   "traffic-orders": null,
+  "air-quality": null,
 };
 
 const ENDPOINTS: Record<DatasetId, string> = {
@@ -18,6 +19,7 @@ const ENDPOINTS: Record<DatasetId, string> = {
   disruptions: "/api/geojson/disruptions",
   collisions: "/api/geojson/collisions",
   "traffic-orders": "/api/geojson/traffic-orders",
+  "air-quality": "/api/geojson/air-quality",
 };
 
 export function useMapData() {

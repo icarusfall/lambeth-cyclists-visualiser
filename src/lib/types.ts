@@ -2,7 +2,8 @@ export type DatasetId =
   | "roadworks"
   | "disruptions"
   | "collisions"
-  | "traffic-orders";
+  | "traffic-orders"
+  | "air-quality";
 
 export type CyclingImpact = "High" | "Medium" | "Low" | "Minimal";
 export type TrafficOrderImpact =
@@ -83,6 +84,21 @@ export interface TrafficOrderRecord {
   cyclingSummary: string;
   coordinates: string;
   nearbyInfrastructure: string;
+}
+
+export type AirQualityBand = "Low" | "Moderate" | "High" | "Very High";
+
+export interface AirQualityRecord {
+  siteCode: string;
+  siteName: string;
+  siteType: string;
+  borough: string;
+  speciesCode: string;
+  readingDate: string | null;
+  airQualityIndex: number | null;
+  airQualityBand: AirQualityBand | null;
+  indexSource: string;
+  coordinates: string;
 }
 
 export interface FilterState {

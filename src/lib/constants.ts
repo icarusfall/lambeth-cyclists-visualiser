@@ -66,6 +66,11 @@ export const LAYER_IDS: Record<
     count: "traffic-orders-cluster-count",
     point: "traffic-orders-points",
   },
+  "air-quality": {
+    cluster: "air-quality-clusters",
+    count: "air-quality-cluster-count",
+    point: "air-quality-points",
+  },
 };
 
 export const REVALIDATION_SECONDS: Record<DatasetId, number> = {
@@ -73,4 +78,5 @@ export const REVALIDATION_SECONDS: Record<DatasetId, number> = {
   disruptions: 3600, // 1 hour
   collisions: 86400, // 24 hours
   "traffic-orders": 3600, // 1 hour
+  "air-quality": 3600, // 1 hour
 };

@@ -8,6 +8,7 @@ import RoadworksLayer from "./layers/RoadworksLayer";
 import DisruptionsLayer from "./layers/DisruptionsLayer";
 import CollisionsLayer from "./layers/CollisionsLayer";
 import TrafficOrdersLayer from "./layers/TrafficOrdersLayer";
+import AirQualityLayer from "./layers/AirQualityLayer";
 import { useMapData } from "@/hooks/useMapData";
 import type { DatasetId } from "@/lib/types";
 
@@ -16,18 +17,15 @@ const DATASET_LABELS: Record<DatasetId, string> = {
   disruptions: "TfL Disruptions",
   collisions: "Collisions",
   "traffic-orders": "Traffic Orders",
+  "air-quality": "Air Quality",
 };
-
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
 
 const CLICKABLE_LAYERS = [
   "roadworks-points",
   "disruptions-points",
   "collisions-points",
   "traffic-orders-points",
+  "air-quality-points",
 ];
 
 interface PopupInfo {
@@ -47,27 +45,10 @@ function getAvailableYears(fc: FeatureCollection<Point> | null): string[] {
   return [...years].sort().reverse();
 }
 
-/** Extract available months (1-12) for selected years. */
-function getAvailableMonths(
-  fc: FeatureCollection<Point> | null,
-  selectedYears: Set<string>
-): Set<number> {
-  if (!fc) return new Set();
-  const months = new Set<number>();
-  for (const f of fc.features) {
-    const date = f.properties?.date as string | undefined;
-    const year = f.properties?.dataYear as string | undefined;
-    if (!date || !year || !selectedYears.has(String(year))) continue;
-    const m = parseInt(date.slice(5, 7), 10);
-    if (m >= 1 && m <= 12) months.add(m);
-  }
-  return months;
-}
-
 export default function MapShell() {
   const { data, loading, errors } = useMapData();
   const [visibleLayers, setVisibleLayers] = useState<Set<DatasetId>>(
-    new Set(["roadworks", "disruptions", "collisions", "traffic-orders"])
+    new Set(["roadworks", "disruptions", "collisions", "traffic-orders", "air-quality"] as DatasetId[])
   );
   const [popupInfo, setPopupInfo] = useState<PopupInfo | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -98,7 +79,6 @@ export default function MapShell() {
 
   // Collision filters — null means "all selected"
   const [collisionYears, setCollisionYears] = useState<Set<string> | null>(null);
-  const [collisionMonths, setCollisionMonths] = useState<Set<number> | null>(null);
   const [collisionSeverities, setCollisionSeverities] = useState<Set<string> | null>(null);
 
   const SEVERITY_LEVELS = ["Fatal", "Serious", "Slight"] as const;
@@ -115,37 +95,20 @@ export default function MapShell() {
     [collisionYears, availableYears]
   );
 
-  const availableMonths = useMemo(
-    () => getAvailableMonths(data.collisions, effectiveYears),
-    [data.collisions, effectiveYears]
-  );
-
-  const effectiveMonths = useMemo(
-    () => collisionMonths ?? availableMonths,
-    [collisionMonths, availableMonths]
-  );
-
   // Client-side filtered collisions
   const filteredCollisions = useMemo(() => {
     if (!data.collisions) return null;
-    // If all filters at default, skip filtering
-    if (!collisionYears && !collisionMonths && !collisionSeverities) return data.collisions;
+    if (!collisionYears && !collisionSeverities) return data.collisions;
 
     const features = data.collisions.features.filter((f) => {
       const year = String(f.properties?.dataYear ?? "");
       if (!effectiveYears.has(year)) return false;
-      if (collisionMonths) {
-        const date = f.properties?.date as string | undefined;
-        if (!date) return false;
-        const m = parseInt(date.slice(5, 7), 10);
-        if (!effectiveMonths.has(m)) return false;
-      }
       const severity = String(f.properties?.severity ?? "");
       if (!effectiveSeverities.has(severity)) return false;
       return true;
     });
     return { ...data.collisions, features } as FeatureCollection<Point>;
-  }, [data.collisions, collisionYears, collisionMonths, collisionSeverities, effectiveYears, effectiveMonths, effectiveSeverities]);
+  }, [data.collisions, collisionYears, collisionSeverities, effectiveYears, effectiveSeverities]);
 
   const toggleLayer = useCallback((id: DatasetId) => {
     setVisibleLayers((prev) => {
@@ -163,18 +126,7 @@ export default function MapShell() {
       else next.add(year);
       return next;
     });
-    // Reset month filter when years change
-    setCollisionMonths(null);
   }, [availableYears]);
-
-  const toggleMonth = useCallback((month: number) => {
-    setCollisionMonths((prev) => {
-      const next = new Set(prev ?? availableMonths);
-      if (next.has(month)) next.delete(month);
-      else next.add(month);
-      return next;
-    });
-  }, [availableMonths]);
 
   const toggleSeverity = useCallback((sev: string) => {
     setCollisionSeverities((prev) => {
@@ -265,7 +217,7 @@ export default function MapShell() {
                 </div>
               )}
 
-              {/* Collision severity/year/month filters */}
+              {/* Collision severity/year filters */}
               {id === "collisions" && visibleLayers.has("collisions") && availableYears.length > 0 && (
                 <div className="ml-6 mt-1 space-y-1">
                   <p className="text-xs font-medium text-gray-500">Severity</p>
@@ -304,30 +256,6 @@ export default function MapShell() {
                     ))}
                   </div>
 
-                  <p className="text-xs font-medium text-gray-500 mt-1">Months</p>
-                  <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                    {MONTH_NAMES.map((name, i) => {
-                      const month = i + 1;
-                      const available = availableMonths.has(month);
-                      return (
-                        <label
-                          key={month}
-                          className={`flex items-center gap-1 text-xs cursor-pointer ${
-                            available ? "text-gray-500" : "text-gray-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={effectiveMonths.has(month)}
-                            onChange={() => toggleMonth(month)}
-                            disabled={!available}
-                            className="rounded w-3 h-3"
-                          />
-                          {name}
-                        </label>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
             </div>
@@ -380,6 +308,12 @@ export default function MapShell() {
           <TrafficOrdersLayer
             data={data["traffic-orders"]}
             visible={visibleLayers.has("traffic-orders")}
+          />
+        )}
+        {data["air-quality"] && (
+          <AirQualityLayer
+            data={data["air-quality"]}
+            visible={visibleLayers.has("air-quality")}
           />
         )}
 
@@ -443,6 +377,22 @@ export default function MapShell() {
                     Nearby:{" "}
                     {String(popupInfo.properties.nearbyInfrastructure)}
                   </p>
+                )}
+                {popupInfo.properties.airQualityBand && (
+                  <p>
+                    Air Quality:{" "}
+                    <span className="font-medium">
+                      {String(popupInfo.properties.airQualityBand)}
+                    </span>
+                    {popupInfo.properties.airQualityIndex != null &&
+                      ` (${String(popupInfo.properties.airQualityIndex)}/10)`}
+                  </p>
+                )}
+                {popupInfo.properties.speciesCode && (
+                  <p>Pollutant: {String(popupInfo.properties.speciesCode)}</p>
+                )}
+                {popupInfo.properties.readingDate && (
+                  <p>Date: {String(popupInfo.properties.readingDate)}</p>
                 )}
               </div>
             </div>
